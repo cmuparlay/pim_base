@@ -13,9 +13,9 @@
 #endif
 
 #ifdef KHB_DEBUG_SPACE
-#define SPACE_IN_DPU_ASSERT(x, y) IN_DPU_ASSERT(x, y)
+#define SPACE_IN_DPU_ASSERT(x) assert(x)
 #else
-#define SPACE_IN_DPU_ASSERT(x, y) {}
+#define SPACE_IN_DPU_ASSERT(x) {}
 #endif
 
 #ifdef KHB_DEBUG_L3

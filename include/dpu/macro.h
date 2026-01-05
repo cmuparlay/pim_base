@@ -58,7 +58,7 @@ typedef __mram_ptr void* mpvoid;
 
 static inline void mram_to_mram(__mram_ptr void* dst, __mram_ptr void* src,
                                 int len) {
-    uint8_t cache[M2M_CACHE_SIZE];
+    __dma_aligned uint8_t cache[M2M_CACHE_SIZE];
     int inslen = 0;
     while (inslen < len) {
         int curlen = MIN(M2M_CACHE_SIZE, len - inslen);

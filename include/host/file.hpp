@@ -8,7 +8,8 @@
 template <typename T, bool check_sorted_deduplicated = false>
 std::vector<T> LoadElementsFromBinary(const std::string& file_path,
                                   const uint64_t start, const uint64_t end) {
-    std::ifstream file(file_path, std::ios::binary);
+    std::ifstream file(file_path, std::ios::binary | std::ios::in);
+    
     if (!file) {
         throw std::runtime_error("Failed to open file: " + file_path);
     } else {

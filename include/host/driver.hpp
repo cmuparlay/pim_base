@@ -149,7 +149,12 @@ class Driver {
     }
 
     void ExecuteInsertBatch(union_operation* ops, int size, int tid) {
-        auto get_KV = [&](size_t i) { return (key_value){.key = ops[i].tsk.i.key, .value = ops[i].tsk.i.value}; };
+        auto get_KV = [&](size_t i) {
+            key_value kv;
+            kv.key = ops[i].tsk.i.key;
+            kv.value = ops[i].tsk.i.value;
+            return kv;
+        };
         IndexType* index = indices_[tid];
         index->RunBatchInsert(size, get_KV);
         if (check_result_) {
@@ -212,8 +217,8 @@ class Driver {
                             if (batch_start_idx >= ops.size()) {
                                 break;
                             }
-                            printf("Start thread %llu / %llu, starting at task %llu\n", tid,
-                                num_threads, next_batch_start_idx.load());
+                            printf("\n\n ******************** Start thread %llu / %llu, starting at task %llu of type %llu ******************** \n\n", tid,
+                                num_threads, next_batch_start_idx.load(), ops[batch_start_idx].type);
                             size_t batch_end_idx =
                                 min(batch_start_idx + batch_size, ops.size());
                             size_t batch_len = batch_end_idx - batch_start_idx;
@@ -272,7 +277,14 @@ class Driver {
     void Init(std::vector<union_operation>& init_ops,
                      int init_batch_size) {
         IO_Manager::init_io_managers();
+        oracle.Init();
         indices_[0]->Init();
+        parlay::parallel_for(0, init_ops.size(), [&](size_t i) {
+            assert(init_ops[i].type == operation_t::insert_t);
+        });
+        parlay::sort_inplace(init_ops, [&](const union_operation& a, const union_operation& b) {
+            return a.tsk.i.key < b.tsk.i.key;
+        });
         ExecuteOperations(init_ops, init_batch_size, 1, "Init");
     }
 
@@ -284,7 +296,9 @@ class Driver {
 
         dpu_energy_stats(false);
 
+        timer::active = false;
         reset_all_timers();
+        timer::active = true;
 
         total_communication = 0;
         total_actual_communication = 0;
@@ -361,24 +375,24 @@ class Driver {
         printf("Test from file: [%s] [%s]\n", files[0].c_str(),
                files[1].c_str());
 
-        std::vector<union_operation> init_ops =
-            LoadElementsFromBinary<union_operation>(files[0], 0,
-                                                    init_file_length);
-        std::vector<union_operation> test_ops =
-            LoadElementsFromBinary<union_operation>(files[1], 0,
-                                                    test_file_length);
+        init_ops = LoadElementsFromBinary<union_operation>(files[0], 0,
+                                                           init_file_length);
+        test_ops = LoadElementsFromBinary<union_operation>(files[1], 0,
+                                                           test_file_length);
 
-
-        for (size_t i = 0; i < num_top_level_threads_; i ++) {
+        for (size_t i = 0; i < num_top_level_threads_; i++) {
             indices_[i] = new IndexType();
         }
 
         init_root_timer();
         timer::active = true;
+
+        std::cout << " ********** Start Init ********** " << std::endl;
         Init(init_ops, init_batch_size);
+        std::cout << " ********** Start Test ********** " << std::endl;
         Test(test_ops, test_batch_size);
 
-        for (size_t i = 0; i < num_top_level_threads_; i ++) {
+        for (size_t i = 0; i < num_top_level_threads_; i++) {
             delete indices_[i];
         }
 
@@ -386,6 +400,8 @@ class Driver {
         cout << "total actual communication"
              << total_actual_communication.load() << endl;
     }
+
+    std::vector<union_operation> init_ops, test_ops;
 
     const static size_t kMaxIndexInterfaces = 5;
     IndexType* indices_[kMaxIndexInterfaces];

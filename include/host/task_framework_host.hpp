@@ -27,6 +27,14 @@
 
 #define SEND_RECEIVE_ASYNC_STATE (DPU_XFER_DEFAULT)
 
+#ifdef DIRECT_INTERFACE
+#define ASYNC_BOOL (false)
+#define ASYNC_MARKER (DPU_XFER_DEFAULT)
+#else
+#define ASYNC_BOOL (false)
+#define ASYNC_MARKER (DPU_XFER_DEFAULT)
+#endif
+
 // IRAM friendly
 using namespace std;
 using namespace parlay;
@@ -454,7 +462,13 @@ class IO_Manager {
 
     IO_Manager() {
         direct_buffer = new uint8_t[NR_DPUS][MAX_TASK_BUFFER_SIZE_PER_DPU];
-        memset(direct_buffer, 0, sizeof(uint8_t) * NR_DPUS * MAX_TASK_BUFFER_SIZE_PER_DPU);
+        
+        uint8_t* buf = (uint8_t*)direct_buffer;
+        size_t size = 1ull * NR_DPUS * MAX_TASK_BUFFER_SIZE_PER_DPU;
+        parlay::parallel_for(0, size, [&](size_t i) {
+            buf[i] = 0;
+        });
+        // memset(direct_buffer, 0, sizeof(uint8_t) * NR_DPUS * MAX_TASK_BUFFER_SIZE_PER_DPU);
     }
 
     void reset() {
@@ -703,11 +717,11 @@ class IO_Manager {
                 DPU_ASSERT(dpu_broadcast_to(dpu_set, DPU_MRAM_HEAP_POINTER_NAME,
                                             DPU_MRAM_HEAP_START_SAFE_BUFFER,
                                             broadcast_buffer[0], size,
-                                            SEND_RECEIVE_ASYNC_STATE));
+                                            DPU_XFER_DEFAULT));
 #else
                 DPU_ASSERT(dpu_broadcast_to(dpu_set, DPU_MRAM_HEAP_POINTER_NAME, 0,
                                         broadcast_buffer[0], size,
-                                        SEND_RECEIVE_ASYNC_STATE));
+                                        DPU_XFER_DEFAULT));
 #endif
             } else if (broadcast_cnt == 0) {
                 ASSERT(broadcast_length == 0);
@@ -719,7 +733,7 @@ class IO_Manager {
                 // DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU,
                 //                          DPU_MRAM_HEAP_POINTER_NAME,
                 //                          DPU_MRAM_HEAP_START_SAFE_BUFFER, size,
-                //                          SEND_RECEIVE_ASYNC_STATE));
+                //                          DPU_XFER_DEFAULT));
                 namespace_pim_interface::SendToPIM(
                     (uint8_t**)direct_buffer_addr, 0, DPU_MRAM_HEAP_POINTER_NAME, DPU_MRAM_HEAP_START_SAFE_BUFFER,
                     size, false
@@ -727,7 +741,7 @@ class IO_Manager {
 #else
                 // DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU,
                 //                      DPU_MRAM_HEAP_POINTER_NAME, 0, size,
-                //                      SEND_RECEIVE_ASYNC_STATE));
+                //                      DPU_XFER_DEFAULT));
                 namespace_pim_interface::SendToPIM(
                     (uint8_t**)direct_buffer_addr, 0, DPU_MRAM_HEAP_POINTER_NAME, 0,
                     size, false
@@ -745,14 +759,14 @@ class IO_Manager {
                 namespace_pim_interface::SendToPIM(
                     (uint8_t**)direct_buffer_addr, 0, DPU_MRAM_HEAP_POINTER_NAME,
                     DPU_MRAM_HEAP_START_SAFE_BUFFER,
-                    CPU_DPU_HEADER, false 
+                    CPU_DPU_HEADER, ASYNC_BOOL 
                 );
                 // broadcast
                 DPU_ASSERT(dpu_broadcast_to(
                     dpu_set, DPU_MRAM_HEAP_POINTER_NAME,
                     CPU_DPU_HEADER + DPU_MRAM_HEAP_START_SAFE_BUFFER,
                     broadcast_buffer[0] + CPU_DPU_HEADER, broadcast_length,
-                    SEND_RECEIVE_ASYNC_STATE));
+                    ASYNC_MARKER));
 
                 // direct
                 // DPU_FOREACH(dpu_set, dpu, each_dpu) {
@@ -1038,9 +1052,9 @@ class IO_Manager {
             pim_coverage_timer->start();
             time_nested("dpu", [&]() {
                 DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
-                while (!dpu_control::ready()) {
-                    std::this_thread::sleep_for(std::chrono::microseconds(100));
-                }
+                // while (!dpu_control::ready()) {
+                //     std::this_thread::sleep_for(std::chrono::microseconds(100));
+                // }
                 time_nested("wait", [&]() { DPU_ASSERT(dpu_sync(dpu_set)); });
             });
             pim_coverage_timer->end();
